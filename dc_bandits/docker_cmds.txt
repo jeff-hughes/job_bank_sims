@@ -1,0 +1,8 @@
+# to build the docker image from Dockerfile
+docker image build -t context_bandits .
+
+# to run the container
+docker container run -it --name cb --mount type=bind,source="$(pwd)",target=/bandits context_bandits
+
+# after exiting the container
+docker container rm cb
