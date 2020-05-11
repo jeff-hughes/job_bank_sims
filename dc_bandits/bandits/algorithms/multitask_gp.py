@@ -42,6 +42,7 @@ class MultitaskGP(BayesianNN):
   def __init__(self, hparams):
     self.name = "MultiTaskGP"
     self.hparams = hparams
+    self.verbose = getattr(self.hparams, "verbose", True)
 
     self.n_in = self.hparams.context_dim
     self.n_out = self.hparams.num_outputs
@@ -121,7 +122,8 @@ class MultitaskGP(BayesianNN):
     Selects the optimizer and, finally, it also initializes the graph.
     """
 
-    logging.info("Initializing model %s.", self.name)
+    if self.verbose:
+        logging.info("Initializing model %s.", self.name)
     self.global_step = tf.train.get_or_create_global_step()
 
     # Define state for the model (inputs, etc.)
@@ -338,7 +340,8 @@ class MultitaskGP(BayesianNN):
       num_steps: Number of minibatches to train the network for.
     """
 
-    logging.info("Training %s for %d steps...", self.name, num_steps)
+    if self.verbose:
+        logging.info("Training %s for %d steps...", self.name, num_steps)
     for step in range(num_steps):
       numpts = min(data.num_points(None), self.max_num_points)
       if numpts >= self.max_num_points and self.keep_fixed_after_max_obs:
