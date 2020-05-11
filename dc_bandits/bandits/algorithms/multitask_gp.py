@@ -66,18 +66,18 @@ class MultitaskGP(BayesianNN):
     self.graph = tf.Graph()
     with self.graph.as_default():
       # store a new session for the graph
-      self.sess = tf.Session()
+      self.sess = tf.compat.v1.Session()
 
-      with tf.variable_scope(self.name, reuse=tf.AUTO_REUSE):
-        self.n = tf.placeholder(shape=[], dtype=tf.float64)
-        self.x = tf.placeholder(shape=[None, self.n_in], dtype=tf.float64)
-        self.x_in = tf.placeholder(shape=[None, self.n_in], dtype=tf.float64)
-        self.y = tf.placeholder(shape=[None, self.n_out], dtype=tf.float64)
-        self.weights = tf.placeholder(shape=[None, self.n_out],
+      with tf.compat.v1.variable_scope(self.name, reuse=tf.compat.v1.AUTO_REUSE):
+        self.n = tf.compat.v1.placeholder(shape=[], dtype=tf.float64)
+        self.x = tf.compat.v1.placeholder(shape=[None, self.n_in], dtype=tf.float64)
+        self.x_in = tf.compat.v1.placeholder(shape=[None, self.n_in], dtype=tf.float64)
+        self.y = tf.compat.v1.placeholder(shape=[None, self.n_out], dtype=tf.float64)
+        self.weights = tf.compat.v1.placeholder(shape=[None, self.n_out],
                                       dtype=tf.float64)
 
         self.build_model()
-      self.sess.run(tf.global_variables_initializer())
+      self.sess.run(tf.compat.v1.global_variables_initializer())
 
   def atleast_2d(self, x, dims):
     return tf.reshape(tf.expand_dims(x, axis=0), (-1, dims))
@@ -124,58 +124,58 @@ class MultitaskGP(BayesianNN):
 
     if self.verbose:
         logging.info("Initializing model %s.", self.name)
-    self.global_step = tf.train.get_or_create_global_step()
+    self.global_step = tf.compat.v1.train.get_or_create_global_step()
 
     # Define state for the model (inputs, etc.)
-    self.x_train = tf.get_variable(
+    self.x_train = tf.compat.v1.get_variable(
         "training_data",
         initializer=tf.ones(
             [self.hparams.batch_size, self.n_in], dtype=tf.float64),
         validate_shape=False,
         trainable=False)
-    self.y_train = tf.get_variable(
+    self.y_train = tf.compat.v1.get_variable(
         "training_labels",
         initializer=tf.zeros([self.hparams.batch_size, 1], dtype=tf.float64),
         validate_shape=False,
         trainable=False)
-    self.weights_train = tf.get_variable(
+    self.weights_train = tf.compat.v1.get_variable(
         "weights_train",
         initializer=tf.ones(
             [self.hparams.batch_size, self.n_out], dtype=tf.float64),
         validate_shape=False,
         trainable=False)
-    self.input_op = tf.assign(self.x_train, self.x_in, validate_shape=False)
-    self.input_w_op = tf.assign(
+    self.input_op = tf.compat.v1.assign(self.x_train, self.x_in, validate_shape=False)
+    self.input_w_op = tf.compat.v1.assign(
         self.weights_train, self.weights, validate_shape=False)
 
-    self.input_std = tf.get_variable(
+    self.input_std = tf.compat.v1.get_variable(
         "data_standard_deviation",
         initializer=tf.ones([1, self.n_out], dtype=tf.float64),
         dtype=tf.float64,
         trainable=False)
-    self.input_mean = tf.get_variable(
+    self.input_mean = tf.compat.v1.get_variable(
         "data_mean",
         initializer=tf.zeros([1, self.n_out], dtype=tf.float64),
         dtype=tf.float64,
         trainable=True)
 
     # GP Hyperparameters
-    self.noise = tf.get_variable(
+    self.noise = tf.compat.v1.get_variable(
         "noise", initializer=tf.cast(0.0, dtype=tf.float64))
-    self.amplitude = tf.get_variable(
+    self.amplitude = tf.compat.v1.get_variable(
         "amplitude", initializer=tf.cast(1.0, dtype=tf.float64))
-    self.amplitude_linear = tf.get_variable(
+    self.amplitude_linear = tf.compat.v1.get_variable(
         "linear_amplitude", initializer=tf.cast(1.0, dtype=tf.float64))
-    self.length_scales = tf.get_variable(
+    self.length_scales = tf.compat.v1.get_variable(
         "length_scales", initializer=tf.zeros([1, self.n_in], dtype=tf.float64))
-    self.length_scales_lin = tf.get_variable(
+    self.length_scales_lin = tf.compat.v1.get_variable(
         "length_scales_linear",
         initializer=tf.zeros([1, self.n_in], dtype=tf.float64))
 
     # Latent embeddings of the different outputs for task covariance
-    self.task_vectors = tf.get_variable(
+    self.task_vectors = tf.compat.v1.get_variable(
         "latent_task_vectors",
-        initializer=tf.random_normal(
+        initializer=tf.random.normal(
             [self.n_out, self.task_latent_dim], dtype=tf.float64))
 
     # Normalize outputs across each dimension
@@ -185,9 +185,9 @@ class MultitaskGP(BayesianNN):
                                    self.n_out)
     index_counts = tf.where(index_counts > 0, index_counts,
                             tf.ones(tf.shape(index_counts), dtype=tf.float64))
-    self.mean_op = tf.assign(self.input_mean,
+    self.mean_op = tf.compat.v1.assign(self.input_mean,
                              tf.reduce_sum(self.y, axis=0) / index_counts)
-    self.var_op = tf.assign(
+    self.var_op = tf.compat.v1.assign(
         self.input_std, tf.sqrt(1e-4 + tf.reduce_sum(tf.square(
             self.y - tf.reduce_sum(self.y, axis=0) / index_counts), axis=0)
                                 / index_counts))
@@ -196,7 +196,7 @@ class MultitaskGP(BayesianNN):
       y_normed = self.atleast_2d(
           (self.y - self.input_mean) / self.input_std, self.n_out)
       y_normed = self.atleast_2d(tf.boolean_mask(y_normed, self.weights > 0), 1)
-    self.out_op = tf.assign(self.y_train, y_normed, validate_shape=False)
+    self.out_op = tf.compat.v1.assign(self.y_train, y_normed, validate_shape=False)
 
     # Observation noise
     alpha = tf.nn.softplus(self.noise) + 1e-6
@@ -207,21 +207,21 @@ class MultitaskGP(BayesianNN):
                        self.task_cov(self.weights, self.weights) +
                        tf.eye(tf.shape(self.x_in)[0], dtype=tf.float64) * alpha)
 
-    self.chol = tf.cholesky(self.self_cov)
-    self.kinv = tf.cholesky_solve(self.chol, tf.eye(tf.shape(self.x_in)[0],
+    self.chol = tf.linalg.cholesky(self.self_cov)
+    self.kinv = tf.linalg.cholesky_solve(self.chol, tf.eye(tf.shape(self.x_in)[0],
                                                     dtype=tf.float64))
 
     self.input_inv = tf.Variable(
         tf.eye(self.hparams.batch_size, dtype=tf.float64),
         validate_shape=False,
         trainable=False)
-    self.input_cov_op = tf.assign(self.input_inv, self.kinv,
+    self.input_cov_op = tf.compat.v1.assign(self.input_inv, self.kinv,
                                   validate_shape=False)
 
     # Log determinant by taking the singular values along the diagonal
     # of self.chol
     with tf.control_dependencies([self.input_cov_op]):
-      logdet = 2.0 * tf.reduce_sum(tf.log(tf.diag_part(self.chol) + 1e-16))
+      logdet = 2.0 * tf.reduce_sum(tf.math.log(tf.linalg.tensor_diag_part(self.chol) + 1e-16))
 
     # Log Marginal likelihood
     self.marginal_ll = -tf.reduce_sum(-0.5 * tf.matmul(
@@ -243,7 +243,7 @@ class MultitaskGP(BayesianNN):
     )
 
     # Optimizer for hyperparameters
-    optimizer = tf.train.AdamOptimizer(learning_rate=self.hparams.lr)
+    optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.hparams.lr)
     vars_to_optimize = [
         self.amplitude, self.length_scales, self.length_scales_lin,
         self.amplitude_linear, self.noise, self.input_mean
@@ -260,9 +260,9 @@ class MultitaskGP(BayesianNN):
 
     # create tensorboard metrics
     self.create_summaries()
-    self.summary_writer = tf.summary.FileWriter("{}/graph_{}".format(
+    self.summary_writer = tf.compat.v1.summary.FileWriter("{}/graph_{}".format(
         FLAGS.logdir, self.name), self.sess.graph)
-    self.check = tf.add_check_numerics_ops()
+    self.check = tf.compat.v1.add_check_numerics_ops()
 
   def posterior_mean_and_sample(self, candidates):
     """Draw samples for test predictions.
@@ -306,13 +306,13 @@ class MultitaskGP(BayesianNN):
 
     # Get the matrix square root through an SVD for drawing samples
     # This seems more numerically stable than the Cholesky
-    s, _, v = tf.svd(test_cov, full_matrices=True)
-    test_sqrt = tf.matmul(v, tf.matmul(tf.diag(s), tf.transpose(v)))
+    s, _, v = tf.linalg.svd(test_cov, full_matrices=True)
+    test_sqrt = tf.matmul(v, tf.matmul(tf.linalg.tensor_diag(s), tf.transpose(v)))
 
     y_sample = (
         tf.matmul(
             test_sqrt,
-            tf.random_normal([tf.shape(test_sqrt)[0], 1], dtype=tf.float64)) +
+            tf.random.normal([tf.shape(test_sqrt)[0], 1], dtype=tf.float64)) +
         y_mean)
 
     y_sample = (
@@ -324,13 +324,13 @@ class MultitaskGP(BayesianNN):
 
   def create_summaries(self):
     with self.graph.as_default():
-      tf.summary.scalar("loss", self.loss)
-      tf.summary.scalar("log_noise", self.noise)
-      tf.summary.scalar("log_amp", self.amplitude)
-      tf.summary.scalar("log_amp_lin", self.amplitude_linear)
-      tf.summary.histogram("length_scales", self.length_scales)
-      tf.summary.histogram("length_scales_lin", self.length_scales_lin)
-      self.summary_op = tf.summary.merge_all()
+      tf.compat.v1.summary.scalar("loss", self.loss)
+      tf.compat.v1.summary.scalar("log_noise", self.noise)
+      tf.compat.v1.summary.scalar("log_amp", self.amplitude)
+      tf.compat.v1.summary.scalar("log_amp_lin", self.amplitude_linear)
+      tf.compat.v1.summary.histogram("length_scales", self.length_scales)
+      tf.compat.v1.summary.histogram("length_scales_lin", self.length_scales_lin)
+      self.summary_op = tf.compat.v1.summary.merge_all()
 
   def train(self, data, num_steps):
     """Trains the GP for num_steps, using the data in 'data'.

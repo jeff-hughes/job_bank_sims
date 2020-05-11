@@ -33,7 +33,7 @@ FLAGS = flags.FLAGS
 
 def log_gaussian(x, mu, sigma, reduce_sum=True):
   """Returns log Gaussian pdf."""
-  res = (-0.5 * np.log(2 * np.pi) - tf.log(sigma) - tf.square(x - mu) /
+  res = (-0.5 * np.log(2 * np.pi) - tf.math.log(sigma) - tf.square(x - mu) /
          (2 * tf.square(sigma)))
   if reduce_sum:
     return tf.reduce_sum(res)
@@ -47,7 +47,7 @@ def analytic_kl(mu_1, sigma_1, mu_2, sigma_2):
   sigma_2_sq = tf.square(sigma_2)
 
   t1 = tf.square(mu_1 - mu_2) / (2. * sigma_2_sq)
-  t2 = (sigma_1_sq/sigma_2_sq - 1. - tf.log(sigma_1_sq) + tf.log(sigma_2_sq))/2.
+  t2 = (sigma_1_sq/sigma_2_sq - 1. - tf.math.log(sigma_1_sq) + tf.math.log(sigma_2_sq))/2.
   return tf.reduce_sum(t1 + t2)
 
 
@@ -96,12 +96,12 @@ class VariationalNeuralBanditModel(BayesianNN):
 
   def build_mu_variable(self, shape):
     """Returns a mean variable initialized as N(0, 0.05)."""
-    return tf.Variable(tf.random_normal(shape, 0.0, 0.05))
+    return tf.Variable(tf.random.normal(shape, 0.0, 0.05))
 
   def build_sigma_variable(self, shape, init=-5.):
     """Returns a sigma variable initialized as N(init, 0.05)."""
     # Initialize sigma to be very small initially to encourage MAP opt first
-    return tf.Variable(tf.random_normal(shape, init, 0.05))
+    return tf.Variable(tf.random.normal(shape, init, 0.05))
 
   def build_layer(self, input_x, input_x_local, shape,
                   layer_id, activation_fn=tf.nn.relu):
@@ -122,7 +122,7 @@ class VariationalNeuralBanditModel(BayesianNN):
 
     w_mu = self.build_mu_variable(shape)
     w_sigma = self.sigma_transform(self.build_sigma_variable(shape))
-    w_noise = tf.random_normal(shape)
+    w_noise = tf.random.normal(shape)
     w = w_mu + w_sigma * w_noise
 
     b_mu = self.build_mu_variable([1, shape[1]])
@@ -141,17 +141,17 @@ class VariationalNeuralBanditModel(BayesianNN):
     if self.use_local_reparameterization:
       # Use analytic KL divergence wrt the prior
       neg_kl = -analytic_kl(w_mu, w_sigma,
-                            0., tf.to_float(np.sqrt(2./shape[0])))
+                            0., tf.cast(np.sqrt(2./shape[0]), dtype=tf.float32))
     else:
       # Create empirical KL loss terms
-      log_p = log_gaussian(w, 0., tf.to_float(np.sqrt(2./shape[0])))
+      log_p = log_gaussian(w, 0., tf.cast(np.sqrt(2./shape[0]), dtype=tf.float32))
       log_q = log_gaussian(w, tf.stop_gradient(w_mu), tf.stop_gradient(w_sigma))
       neg_kl = log_p - log_q
 
     # Apply local reparameterization trick: sample activations pre nonlinearity
     m_h = tf.matmul(input_x_local, w_mu) + b
     v_h = tf.matmul(tf.square(input_x_local), tf.square(w_sigma))
-    output_h_local = m_h + tf.sqrt(v_h + 1e-6) * tf.random_normal(tf.shape(v_h))
+    output_h_local = m_h + tf.sqrt(v_h + 1e-6) * tf.random.normal(tf.shape(v_h))
     output_h_local = activation_fn(output_h_local)
 
     return output_h, output_h_local, neg_kl
@@ -166,7 +166,7 @@ class VariationalNeuralBanditModel(BayesianNN):
         self.build_sigma_variable([1, self.n_out]))
 
     pre_noise_sigma = (noise_sigma_mu
-                       + tf.random_normal([1, self.n_out]) * noise_sigma_sigma)
+                       + tf.random.normal([1, self.n_out]) * noise_sigma_sigma)
     self.noise_sigma = self.sigma_transform(pre_noise_sigma)
 
     # Compute KL for additive noise sigma terms.
@@ -237,7 +237,7 @@ class VariationalNeuralBanditModel(BayesianNN):
           self.y, y_hat, self.hparams.noise_sigma, reduce_sum=False)
 
     # Only take into account observed outcomes (bandits setting)
-    batch_size = tf.to_float(tf.shape(self.x)[0])
+    batch_size = tf.cast(tf.shape(self.x)[0], dtype=tf.float32)
     weighted_log_likelihood = tf.reduce_sum(
         log_likelihood * self.weights) / batch_size
 
@@ -245,13 +245,13 @@ class VariationalNeuralBanditModel(BayesianNN):
     elbo = weighted_log_likelihood + (neg_kl_term / self.n)
 
     self.loss = -elbo
-    self.global_step = tf.train.get_or_create_global_step()
-    self.train_op = tf.train.AdamOptimizer(self.hparams.initial_lr).minimize(
+    self.global_step = tf.compat.v1.train.get_or_create_global_step()
+    self.train_op = tf.compat.v1.train.AdamOptimizer(self.hparams.initial_lr).minimize(
         self.loss, global_step=self.global_step)
 
     # Create tensorboard metrics
     self.create_summaries()
-    self.summary_writer = tf.summary.FileWriter(
+    self.summary_writer = tf.compat.v1.summary.FileWriter(
         "{}/graph_{}".format(FLAGS.logdir, self.name), self.sess.graph)
 
   def build_graph(self):
@@ -265,25 +265,25 @@ class VariationalNeuralBanditModel(BayesianNN):
     self.graph = tf.Graph()
     with self.graph.as_default():
 
-      self.sess = tf.Session()
+      self.sess = tf.compat.v1.Session()
 
-      self.n = tf.placeholder(shape=[], dtype=tf.float32)
+      self.n = tf.compat.v1.placeholder(shape=[], dtype=tf.float32)
 
-      self.x = tf.placeholder(shape=[None, self.n_in], dtype=tf.float32)
-      self.y = tf.placeholder(shape=[None, self.n_out], dtype=tf.float32)
-      self.weights = tf.placeholder(shape=[None, self.n_out], dtype=tf.float32)
+      self.x = tf.compat.v1.placeholder(shape=[None, self.n_in], dtype=tf.float32)
+      self.y = tf.compat.v1.placeholder(shape=[None, self.n_out], dtype=tf.float32)
+      self.weights = tf.compat.v1.placeholder(shape=[None, self.n_out], dtype=tf.float32)
 
       self.build_model()
-      self.sess.run(tf.global_variables_initializer())
+      self.sess.run(tf.compat.v1.global_variables_initializer())
 
   def create_summaries(self):
     """Defines summaries including mean loss, and global step."""
 
     with self.graph.as_default():
       with tf.name_scope(self.name + "_summaries"):
-        tf.summary.scalar("loss", self.loss)
-        tf.summary.scalar("global_step", self.global_step)
-        self.summary_op = tf.summary.merge_all()
+        tf.compat.v1.summary.scalar("loss", self.loss)
+        tf.compat.v1.summary.scalar("global_step", self.global_step)
+        self.summary_op = tf.compat.v1.summary.merge_all()
 
   def assign_lr(self):
     """Resets the learning rate in dynamic schedules for subsequent trainings.

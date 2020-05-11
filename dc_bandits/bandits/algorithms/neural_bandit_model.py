@@ -62,7 +62,7 @@ class NeuralBanditModel(BayesianNN):
     )
 
     if dropout:
-      nn = tf.nn.dropout(nn, self.hparams.keep_prob)
+      nn = tf.nn.dropout(nn, rate=1-self.hparams.keep_prob)
 
     return nn
 
@@ -71,13 +71,13 @@ class NeuralBanditModel(BayesianNN):
     init_s = self.hparams.init_scale
 
     scope_name = "prediction_{}".format(self.name)
-    with tf.variable_scope(scope_name, reuse=tf.AUTO_REUSE):
+    with tf.compat.v1.variable_scope(scope_name, reuse=tf.compat.v1.AUTO_REUSE):
       nn = self.x
       for num_units in self.hparams.layer_sizes:
         if num_units > 0:
           nn = self.build_layer(nn, num_units)
 
-      y_pred = tf.layers.dense(
+      y_pred = tf.compat.v1.layers.dense(
           nn,
           self.hparams.num_actions,
           kernel_initializer=tf.random_uniform_initializer(-init_s, init_s))
@@ -98,38 +98,38 @@ class NeuralBanditModel(BayesianNN):
     with self.graph.as_default():
 
       # create and store a new session for the graph
-      self.sess = tf.Session()
+      self.sess = tf.compat.v1.Session()
 
       with tf.name_scope(self.name):
 
-        self.global_step = tf.train.get_or_create_global_step()
+        self.global_step = tf.compat.v1.train.get_or_create_global_step()
 
         # context
-        self.x = tf.placeholder(
+        self.x = tf.compat.v1.placeholder(
             shape=[None, self.hparams.context_dim],
             dtype=tf.float32,
             name="{}_x".format(self.name))
 
         # reward vector
-        self.y = tf.placeholder(
+        self.y = tf.compat.v1.placeholder(
             shape=[None, self.hparams.num_actions],
             dtype=tf.float32,
             name="{}_y".format(self.name))
 
         # weights (1 for selected action, 0 otherwise)
-        self.weights = tf.placeholder(
+        self.weights = tf.compat.v1.placeholder(
             shape=[None, self.hparams.num_actions],
             dtype=tf.float32,
             name="{}_w".format(self.name))
 
         # with tf.variable_scope("prediction_{}".format(self.name)):
         self.nn, self.y_pred = self.forward_pass()
-        self.loss = tf.squared_difference(self.y_pred, self.y)
+        self.loss = tf.compat.v1.squared_difference(self.y_pred, self.y)
         self.weighted_loss = tf.multiply(self.weights, self.loss)
         self.cost = tf.reduce_sum(self.weighted_loss) / self.hparams.batch_size
 
         if self.hparams.activate_decay:
-          self.lr = tf.train.inverse_time_decay(
+          self.lr = tf.compat.v1.train.inverse_time_decay(
               self.hparams.initial_lr, self.global_step,
               1, self.hparams.lr_decay_rate)
         else:
@@ -137,10 +137,10 @@ class NeuralBanditModel(BayesianNN):
 
         # create tensorboard metrics
         self.create_summaries()
-        self.summary_writer = tf.summary.FileWriter(
+        self.summary_writer = tf.compat.v1.summary.FileWriter(
             "{}/graph_{}".format(FLAGS.logdir, self.name), self.sess.graph)
 
-        tvars = tf.trainable_variables()
+        tvars = tf.compat.v1.trainable_variables()
         grads, _ = tf.clip_by_global_norm(
             tf.gradients(self.cost, tvars), self.hparams.max_grad_norm)
 
@@ -149,7 +149,7 @@ class NeuralBanditModel(BayesianNN):
         self.train_op = self.optimizer.apply_gradients(
             zip(grads, tvars), global_step=self.global_step)
 
-        self.init = tf.global_variables_initializer()
+        self.init = tf.compat.v1.global_variables_initializer()
 
         self.initialize_graph()
 
@@ -173,24 +173,24 @@ class NeuralBanditModel(BayesianNN):
     if self.hparams.activate_decay:
       current_gs = self.sess.run(self.global_step)
       with self.graph.as_default():
-        self.lr = tf.train.inverse_time_decay(self.hparams.initial_lr,
+        self.lr = tf.compat.v1.train.inverse_time_decay(self.hparams.initial_lr,
                                               self.global_step - current_gs,
                                               decay_steps,
                                               self.hparams.lr_decay_rate)
 
   def select_optimizer(self):
     """Selects optimizer. To be extended (SGLD, KFAC, etc)."""
-    return tf.train.RMSPropOptimizer(self.lr)
+    return tf.compat.v1.train.RMSPropOptimizer(self.lr)
 
   def create_summaries(self):
     """Defines summaries including mean loss, learning rate, and global step."""
 
     with self.graph.as_default():
       with tf.name_scope(self.name + "_summaries"):
-        tf.summary.scalar("cost", self.cost)
-        tf.summary.scalar("lr", self.lr)
-        tf.summary.scalar("global_step", self.global_step)
-        self.summary_op = tf.summary.merge_all()
+        tf.compat.v1.summary.scalar("cost", self.cost)
+        tf.compat.v1.summary.scalar("lr", self.lr)
+        tf.compat.v1.summary.scalar("global_step", self.global_step)
+        self.summary_op = tf.compat.v1.summary.merge_all()
 
   def train(self, data, num_steps):
     """Trains the network for num_steps, using the provided data.

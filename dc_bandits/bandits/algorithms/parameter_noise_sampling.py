@@ -65,12 +65,12 @@ class ParameterNoiseSampling(BanditAlgorithm):
     with self.bnn.graph.as_default():
 
       # noise-injection std placeholder
-      self.bnn.noise_std_ph = tf.placeholder(tf.float32, shape=())
+      self.bnn.noise_std_ph = tf.compat.v1.placeholder(tf.float32, shape=())
 
       # create noise corruption op; adds noise to all weights
-      tvars = tf.trainable_variables()
+      tvars = tf.compat.v1.trainable_variables()
       self.bnn.noisy_grads = [
-          tf.random_normal(v.get_shape(), 0, self.bnn.noise_std_ph)
+          tf.random.normal(v.get_shape(), 0, self.bnn.noise_std_ph)
           for v in tvars
       ]
 

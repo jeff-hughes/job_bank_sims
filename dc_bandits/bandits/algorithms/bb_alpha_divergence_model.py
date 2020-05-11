@@ -96,14 +96,14 @@ class BBAlphaDivergence(BayesianNN):
 
     with self.graph.as_default():
 
-      self.sess = tf.Session()
-      self.x = tf.placeholder(shape=[None, self.n_in],
+      self.sess = tf.compat.v1.Session()
+      self.x = tf.compat.v1.placeholder(shape=[None, self.n_in],
                               dtype=tf.float32, name='x')
-      self.y = tf.placeholder(shape=[None, self.n_out],
+      self.y = tf.compat.v1.placeholder(shape=[None, self.n_out],
                               dtype=tf.float32, name='y')
-      self.weights = tf.placeholder(shape=[None, self.n_out],
+      self.weights = tf.compat.v1.placeholder(shape=[None, self.n_out],
                                     dtype=tf.float32, name='w')
-      self.data_size = tf.placeholder(tf.float32, shape=(), name='data_size')
+      self.data_size = tf.compat.v1.placeholder(tf.float32, shape=(), name='data_size')
 
       self.prior_variance = self.hparams.prior_variance
       if self.prior_variance < 0:
@@ -112,16 +112,16 @@ class BBAlphaDivergence(BayesianNN):
             self.build_mu_variable([1, 1]))
 
       self.build_model()
-      self.sess.run(tf.global_variables_initializer())
+      self.sess.run(tf.compat.v1.global_variables_initializer())
 
   def build_mu_variable(self, shape):
     """Returns a mean variable initialized as N(0, 0.05)."""
-    return tf.Variable(tf.random_normal(shape, 0.0, 0.05))
+    return tf.Variable(tf.random.normal(shape, 0.0, 0.05))
 
   def build_sigma_variable(self, shape, init=-5.):
     """Returns a sigma variable initialized as N(init, 0.05)."""
     # Initialize sigma to be very small initially to encourage MAP opt first
-    return tf.Variable(tf.random_normal(shape, init, 0.05))
+    return tf.Variable(tf.random.normal(shape, init, 0.05))
 
   def build_layer(self, input_x, shape, layer_id, activation_fn=tf.nn.relu):
     """Builds a layer with N(mean, std) for each weight, and samples from it."""
@@ -129,14 +129,14 @@ class BBAlphaDivergence(BayesianNN):
     w_mu = self.build_mu_variable(shape)
     w_sigma = self.sigma_transform.forward(self.build_sigma_variable(shape))
 
-    w_noise = tf.random_normal(shape)
+    w_noise = tf.random.normal(shape)
     w = w_mu + w_sigma * w_noise
 
     b_mu = self.build_mu_variable([1, shape[1]])
     b_sigma = self.sigma_transform.forward(
         self.build_sigma_variable([1, shape[1]]))
 
-    b_noise = tf.random_normal([1, shape[1]])
+    b_noise = tf.random.normal([1, shape[1]])
     b = b_mu + b_sigma * b_noise
 
     # Create outputs
@@ -169,8 +169,8 @@ class BBAlphaDivergence(BayesianNN):
 
         # sample weights from Gaussian distribution
         shape = w_mu.shape
-        w_noise = tf.random_normal(shape)
-        b_noise = tf.random_normal([1, int(shape[1])])
+        w_noise = tf.random.normal(shape)
+        b_noise = tf.random.normal([1, int(shape[1])])
         w = w_mu + w_sigma * w_noise
         b = b_mu + b_sigma * b_noise
 
@@ -212,10 +212,10 @@ class BBAlphaDivergence(BayesianNN):
         b_sigma = self.biases_std[layer_id]
 
         w_term = 0.5 * tf.reduce_sum(w_mu ** 2 / w_sigma ** 2)
-        w_term += 0.5 * tf.reduce_sum(tf.log(2 * np.pi) + 2 * tf.log(w_sigma))
+        w_term += 0.5 * tf.reduce_sum(tf.math.log(2 * np.pi) + 2 * tf.math.log(w_sigma))
 
         b_term = 0.5 * tf.reduce_sum(b_mu ** 2 / b_sigma ** 2)
-        b_term += 0.5 * tf.reduce_sum(tf.log(2 * np.pi) + 2 * tf.log(b_sigma))
+        b_term += 0.5 * tf.reduce_sum(tf.math.log(2 * np.pi) + 2 * tf.math.log(b_sigma))
 
         log_z_q += w_term + b_term
 
@@ -224,7 +224,7 @@ class BBAlphaDivergence(BayesianNN):
   def log_z_prior(self):
     """Computes log-partition function of the prior parameters."""
     num_params = self.num_w + self.num_b
-    return num_params * 0.5 * tf.log(2 * np.pi * self.prior_variance)
+    return num_params * 0.5 * tf.math.log(2 * np.pi * self.prior_variance)
 
   def log_alpha_likelihood_ratio(self, activation_fn=tf.nn.relu):
 
@@ -248,7 +248,7 @@ class BBAlphaDivergence(BayesianNN):
     nn_log_ratio = nn_log_lk_stack - nn_f_tile
     nn_log_ratio = self.alpha * tf.transpose(nn_log_ratio)
     logsumexp_value = tf.reduce_logsumexp(nn_log_ratio, -1)
-    log_k_scalar = tf.log(tf.cast(self.num_mc_nn_samples, tf.float32))
+    log_k_scalar = tf.math.log(tf.cast(self.num_mc_nn_samples, tf.float32))
     log_k = log_k_scalar * tf.ones([self.batch_size])
 
     return tf.reduce_sum(logsumexp_value - log_k, -1)
@@ -272,7 +272,7 @@ class BBAlphaDivergence(BayesianNN):
     noise_sigma_sigma = self.sigma_transform.forward(
         self.build_sigma_variable([1, self.n_out]))
 
-    pre_noise_sigma = noise_sigma_mu + tf.random_normal(
+    pre_noise_sigma = noise_sigma_mu + tf.random.normal(
         [1, self.n_out]) * noise_sigma_sigma
     self.noise_sigma = self.sigma_transform.forward(pre_noise_sigma)
 
@@ -303,24 +303,24 @@ class BBAlphaDivergence(BayesianNN):
     energy = logzprior - logzq - log_ratio
 
     self.loss = energy
-    self.global_step = tf.train.get_or_create_global_step()
-    self.train_op = tf.train.AdamOptimizer(self.hparams.initial_lr).minimize(
+    self.global_step = tf.compat.v1.train.get_or_create_global_step()
+    self.train_op = tf.compat.v1.train.AdamOptimizer(self.hparams.initial_lr).minimize(
         self.loss, global_step=self.global_step)
 
     # Useful for debugging
-    sq_loss = tf.squared_difference(self.y_pred, self.y)
+    sq_loss = tf.math.squared_difference(self.y_pred, self.y)
     weighted_sq_loss = self.weights * sq_loss
     self.cost = tf.reduce_sum(weighted_sq_loss) / self.batch_size
 
     # Create tensorboard metrics
     self.create_summaries()
-    self.summary_writer = tf.summary.FileWriter('{}/graph_{}'.format(
+    self.summary_writer = tf.compat.v1.summary.FileWriter('{}/graph_{}'.format(
         FLAGS.logdir, self.name), self.sess.graph)
 
   def create_summaries(self):
-    tf.summary.scalar('loss', self.loss)
-    tf.summary.scalar('cost', self.cost)
-    self.summary_op = tf.summary.merge_all()
+    tf.compat.v1.summary.scalar('loss', self.loss)
+    tf.compat.v1.summary.scalar('cost', self.cost)
+    self.summary_op = tf.compat.v1.summary.merge_all()
 
   def assign_lr(self):
     """Resets the learning rate in dynamic schedules for subsequent trainings.
