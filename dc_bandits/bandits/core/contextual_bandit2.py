@@ -61,7 +61,7 @@ def run_contextual_bandit(context_dim, num_actions, dataset, algos):
         for j in range(num_contexts):
             context = cmab.context(j)
             action = a.action(context)
-            reward = cmab.reward(i, action)
+            reward = cmab.reward(j, action)
             a.update(context, action, reward)
             actions[j] = action
             rewards[j] = reward

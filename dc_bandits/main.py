@@ -6,7 +6,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.training import HParams
 
-# from contextual_bandit import ContextBanditSim
 from bandits.core.contextual_bandit2 import run_contextual_bandit
 from bandits.data.data_sampler import sample_mushroom_data
 
@@ -19,62 +18,38 @@ from bandits.algorithms.linear_full_posterior_sampling import LinearFullPosterio
 from bandits.algorithms.bootstrapped_bnn_sampling import BootstrappedBNNSampling
 from bandits.algorithms.parameter_noise_sampling import ParameterNoiseSampling
 
-# def context_bandit_gen_context():
-#     """Randomly selects a gender (0 or 1) and normalized age (between 18
-#     and 65) from a uniform distribution.
-#     """
-#     gender = np.random.choice([0, 1])
-#     age = np.random.choice(range(18, 65))
-#     norm_age = (age - 18) / (65 - 18)
-#     return np.array([gender, norm_age])
+def context_bandit_gen_context():
+    """Randomly selects a gender (0 or 1) and normalized age (between 18
+    and 65) from a uniform distribution.
+    """
+    gender = np.random.choice([0, 1])
+    age = np.random.choice(range(18, 65))
+    norm_age = (age - 18) / (65 - 18)
+    return np.array([gender, norm_age])
 
-# def context_bandit_prob(ctx, action):
-#     """Given a context (gender, age) and an action (0 or 1), provides the
-#     probability of receiving a reward. Probability is determined based on
-#     a logistic function with pre-specified parameters.
-#     """
-#     gender = ctx[0]
-#     age = ctx[1]
-#     alpha = (-0.3) + (-0.6)*action + (-0.4)*gender + 0.8*gender*action + 0.7*age + 0.5*age*action
-#     prob = 1 / (1 + np.exp(-alpha))
-#     return prob
+def context_bandit_prob(ctx, action):
+    """Given a context (gender, age) and an action (0 or 1), provides the
+    probability of receiving a reward. Probability is determined based on
+    a logistic function with pre-specified parameters.
+    """
+    gender = ctx[0]
+    age = ctx[1]
+    alpha = (-0.3) + (-0.6)*action + (-0.4)*gender + 0.8*gender*action + 0.7*age + 0.5*age*action
+    prob = 1 / (1 + np.exp(-alpha))
+    return prob
 
-# def context_bandit_reward(ctx, action):
-#     """Given a context (gender, age) and an action (0 or 1), provides a
-#     reward based on a pre-specified probability distribution.
-#     """
-#     prob = context_bandit_prob(ctx, action)
-#     return int(np.random.rand() < prob)
-
-# n = 50000
-# num_bandits = 2
-# data = np.empty((n, 6), dtype=np.float)
-# for iter in range(n):
-#     ctx = context_bandit_gen_context()
-#     all_probs = [context_bandit_prob(ctx, a) for a in range(num_bandits)]
-#     optimal = np.argmax(all_probs)
-#     rewards = [context_bandit_reward(ctx, a) for a in range(num_bandits)]
-#     data[iter, :] = np.array(ctx.tolist() + rewards + [optimal, all_probs[optimal]])
-
-# data structure:
-# (50000, 6)
-# columns: [gender, age, arm0_reward, arm1_reward, optimal_action, optimal_expected_reward]
+def context_bandit_reward(ctx, action):
+    """Given a context (gender, age) and an action (0 or 1), provides a
+    reward based on a pre-specified probability distribution.
+    """
+    prob = context_bandit_prob(ctx, action)
+    return int(np.random.rand() < prob)
 
 data_route = "datasets"
 
 FLAGS = flags.FLAGS
 FLAGS.set_default('alsologtostderr', True)
 flags.DEFINE_string('logdir', '/bandits/logs/', 'Base directory to save output')
-
-def sample_data(data_type, num_contexts=None):
-    """Sample data from given 'data_type'."""
-    if data_type == "mushroom":
-        num_actions = 2
-        context_dim = 117
-        data_path = os.path.join(data_route, "mushroom.data")
-        dataset, opt_mushroom = sample_mushroom_data(data_path, num_contexts)
-        opt_rewards, opt_actions = opt_mushroom
-    return dataset, opt_rewards, opt_actions, num_actions, context_dim
 
 def display_results(algos, opt_rewards, opt_actions, h_rewards, times, name):
     """Displays summary statistics of the performance of each algorithm."""
@@ -101,10 +76,22 @@ def display_results(algos, opt_rewards, opt_actions, h_rewards, times, name):
 
 def main(_):
     # create dataset
-    data_type = "mushroom"
-    num_contexts = 2000  # number of iterations/samples
-    dataset, opt_rewards, opt_actions, num_actions, context_dim = sample_data(data_type, num_contexts)
-
+    data_type = "job_bank"
+    num_contexts = 2000
+    num_actions = 2
+    context_dim = 2
+    dataset = np.empty((num_contexts, 4), dtype=np.float)
+    opt_actions = np.empty(num_contexts, dtype=np.int)
+    opt_rewards = np.empty(num_contexts, dtype=np.float)
+    for iter in range(num_contexts):
+        ctx = context_bandit_gen_context()
+        all_probs = [context_bandit_prob(ctx, a) for a in range(num_actions)]
+        optimal = np.argmax(all_probs)
+        rewards = [context_bandit_reward(ctx, a) for a in range(num_actions)]
+        dataset[iter, :] = np.array(ctx.tolist() + rewards)
+        opt_actions[iter] = optimal
+        opt_rewards[iter] = all_probs[optimal]
+    
     hparams = HParams(num_actions=num_actions)
 
     hparams_linear = HParams(
