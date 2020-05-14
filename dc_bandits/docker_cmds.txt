@@ -5,7 +5,7 @@ docker image build -t context_bandits .
 docker container run -it --name cb --gpus all --user $(id -u):$(id -g) --mount type=bind,source="$(pwd)",target=/bandits context_bandits
 
 # inside the container
-python main.py | tee output$(date +%F_%T).txt
+python main.py | tee output/output$(date +%F_%T).txt
 
 # after exiting the container
 docker container rm cb
